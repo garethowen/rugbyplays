@@ -1,5 +1,6 @@
 # rugbyplays
 rugby set piece play animations, vanilla html5
+http://plays.solingenzebras.de
 
 I developed this when I was coaching a local rugby team. 
 So the players could learn the team's playbook on their smart phone.
