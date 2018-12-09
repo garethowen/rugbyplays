@@ -1,0 +1,681 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+	<style type="text/css">
+		.playBox {
+			background-color: gray;
+			padding: 10px;
+			width: 200px;
+			height: 20px;
+			margin: 10px;
+			cursor: pointer;
+			display: inline-block;
+		}
+	</style>
+</head>
+
+<body>
+	<canvas id="gameCanvas" width=480 height=400>Sorry, your browser doesn't support the &lt;canvas&gt; element.</canvas>
+	<div id="playBoxContainer" style="width:480"></div>
+
+<script type="text/javascript">
+	var gameCanvas = document.getElementById("gameCanvas");
+	var ctx = gameCanvas.getContext("2d");
+
+	var width = 480;
+	var height = 400;
+		
+	var plays = [];
+	var startTime;
+	var play;
+	var playLength;
+
+	var withRotation = true;
+	var slomo = false;
+	/*
+	TODO:
+		- add defenders
+		- switch left-to-right / right-to-left
+		- scrum-back-row moves. Yes-please, 90, 80, 89, 82.
+		- user defined plays
+		- player rotations would be nice. But they look crap if we don't animate the turns.
+		- improve the player graphics
+		- add 'key-points' notes: #12 runs the angle at inside shoulder of opposition #12.
+		- pause / replay / slider control
+		- editor
+		
+	- A 'play' is defined by a list of players and their key-frame based animations.
+	A player is something like:
+	{	name:"gareth",
+	keyFrames: [
+	{time:0, x:10, y:10},
+	{time:0, x:40, y:40}
+	]}
+	
+	- In each frame, we take the play and generate a frame for the current time. Which we send to the renderer.
+	The frame is an array of players as specified above
+
+	- camera?
+	- can we automatically zoom in? By calculating the max and min x/y values in the play?
+	- or is that somebody elses job?
+		
+	*/
+
+var crashOne = {
+	playname: "Crash-1",
+	attackers: [
+		{
+			name: "9", 
+			keyFrames: [
+				{time:0.2, x:30, y:100}
+			]
+		},
+		{
+			name: "10", 
+			keyFrames: [
+				{time:0, x:150, y:160},
+				{ time: 0.8, x: 150, y: 145 },
+				{ time: 1.3, x: 160, y: 125 },
+				{time:1.5, x:166, y:123}
+			]
+		},
+		{
+			name: "12", 
+			keyFrames: [
+				{time:0, x:270, y:240},
+				{time:1.0, x:275, y:200},
+				//{time:1.7, x:250, y:140},
+				//{time:2.2, x:240, y:100},
+				{time:2.5, x:230, y:60}
+			]
+		},
+		{
+			name: "13", 
+			keyFrames: [
+				{time:0, x:310, y:240},
+				{time:2, x:320, y:180},
+				{time:3, x:315, y:140}
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{from: 0, to:0.3, playerName:"9"},
+			{ from: 0.7, to: 1.4, playerName: "10" },
+			{ from: 1.60, to: 4.0, playerName: "12" }
+		]
+	}
+};
+
+var crashTwo = {
+	playname: "Crash-2",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0, x: 150, y: 150 },
+				{ time: 1, x: 155, y: 140 },
+				{ time: 2, x: 160, y: 135 },
+				{ time: 3.0, x: 265, y: 140 },
+				{ time: 3.5, x: 290, y: 110 },
+				{ time: 3.8, x: 300, y: 100 }
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0, x: 270, y: 240 },
+				{ time: 1, x: 275, y: 200 },
+				{ time: 2, x: 250, y: 120 },
+				{ time: 2.7, x: 235, y: 80 }
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0, x: 340, y: 240 },
+				{ time: 2, x: 350, y: 200 },
+				{ time: 3, x: 360, y: 180 },
+				{ time: 3.7, x: 370, y: 130 },
+				{ time: 4.2, x: 375, y: 90 }
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 1.2, playerName: "10" },
+			{ from: 1.5, to: 2.5, playerName: "12" },
+			{ from: 2.7, to: 3.5, playerName: "10" },
+			{ from: 3.8, to: 5.0, playerName: "13" }
+		]
+	}
+};
+
+var pissOff = {
+	playname: "Piss-off",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0.2, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0, x: 150, y: 150 },
+				{ time: 0.8, x: 150, y: 140 },
+				{ time: 1.6, x: 163, y: 130 }
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0, x: 260, y: 200 },
+				{ time: 0.5, x: 260, y: 170 },
+				//{ time: 1, x: 245, y: 140 },
+				{ time: 1.5, x: 230, y: 110 }
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0, x: 310, y: 280 },
+				//{ time: 1.5, x: 320, y: 220 },
+				//{ time: 3, x: 370, y: 110 }
+				{ time: 1.5, x: 330, y: 230 },
+				{ time: 3, x: 390, y: 80 }
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 1.5, playerName: "10" },
+			{ from: 2.0, to: 4.0, playerName: "13" }
+		]
+	}
+};
+
+var adidas = {
+	playname: "Adidas",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0.2, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0, x: 150, y: 180 },
+				{ time: 0.5, x: 152, y: 165 },
+				{ time: 1.2, x: 160, y: 155 }
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0.5, x: 250, y: 220 },
+				{ time: 1.6, x: 255, y: 170 },
+				{ time: 1.8, x: 265, y: 165 }
+				
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0.3, x: 400, y: 300 },
+				{ time: 0.7, x: 400, y: 290 },
+				{ time: 1.4, x: 400, y: 260 },
+				{ time: 3, x: 290, y: 60 }
+
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 1.0, playerName: "10" },
+			{ from: 1.3, to: 1.7, playerName: "12" },
+			{ from: 2.0, to: 3, playerName: "13" }
+		]
+	}
+};
+
+var trigger1 = {
+	playname: "Trigger-1",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0.2, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0, x: 150, y: 180 },
+				{ time: 1.5, x: 160, y: 150 }
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0, x: 225, y: 240 },
+				{ time: 1.0, x: 235, y: 225 },
+				{ time: 2.0, x: 330, y: 220 },
+				{ time: 2.8, x: 410, y: 170 },
+				{ time: 3.5, x: 425, y: 110 }
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0.3, x: 330, y: 260 },
+				{ time: 2.0, x: 330, y: 180 },
+				{ time: 3.0, x: 335, y: 140 }
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 1.1, playerName: "10" },
+			{ from: 1.6, to: 2.2, playerName: "13" },
+			{ from: 2.5, to: 4.0, playerName: "12" }
+		]
+	}
+};
+
+var X1 = {
+	playname: "X-1",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0.2, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0.5, x: 150, y: 200 },
+				{ time: 1.5, x: 160, y: 150 },
+				{ time: 2.5, x: 260, y: 90 },
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0.5, x: 280, y: 240 },
+				{ time: 1.5, x: 280, y: 200 },
+				{ time: 2.5, x: 190, y: 120 },
+				{ time: 3.0, x: 180, y: 60 }
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0.6, x: 350, y: 260 },
+				{ time: 1.0, x: 352, y: 250 },
+				{ time: 3.0, x: 360, y: 140 },
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 1.9, playerName: "10" },
+			{ from: 2.1, to: 3.0, playerName: "12" }
+		]
+	}
+};
+
+var X1blue = {
+	playname: "X-1 BLUE",
+	attackers: [
+		{
+			name: "9",
+			keyFrames: [
+				{ time: 0.2, x: 30, y: 100 }
+			]
+		},
+		{
+			name: "10",
+			keyFrames: [
+				{ time: 0.5, x: 150, y: 200 },
+				{ time: 1.5, x: 160, y: 150 },
+				{ time: 3.0, x: 270, y: 70 },
+				{ time: 3.5, x: 300, y: 70 }
+				//{ time: 3.5, x: 300, y: 40 }
+			]
+		},
+		{
+			name: "12",
+			keyFrames: [
+				{ time: 0.5, x: 280, y: 240 },
+				{ time: 1.5, x: 280, y: 200 },
+				{ time: 2.5, x: 190, y: 120 },
+				{ time: 3.0, x: 180, y: 60 }
+			]
+		},
+		{
+			name: "13",
+			keyFrames: [
+				{ time: 0.6, x: 350, y: 260 },
+				{ time: 1.0, x: 352, y: 250 },
+				{ time: 2.5, x: 365, y: 150 },
+				{ time: 3.5, x: 400, y: 60 }
+			]
+		}
+	],
+	ball: {
+		carriedBy: [
+			{ from: 0, to: 0.3, playerName: "9" },
+			{ from: 0.7, to: 2.8, playerName: "10" },
+			{ from: 3.1, to: 3.5, playerName: "13" }
+		]
+	}
+};
+
+function buildPlayButtons() {
+	plays.push(crashOne);
+	plays.push(crashTwo);
+	plays.push(pissOff);
+	plays.push(adidas);
+	plays.push(X1);
+	plays.push(X1blue);
+	plays.push(trigger1);
+	
+	var container = document.getElementById("playBoxContainer");
+	var newElement;
+	var i;
+	var playname;
+	
+	for (i=0;i<plays.length;i++) {
+		playname = plays[i].playname;
+		newElement = document.createElement("div");
+		newElement.className = "playBox";
+		newElement.textContent = playname;
+		newElement.addEventListener("click", startLoop.bind(null, playname));
+		container.appendChild(newElement);
+	}
+}
+
+window.requestAnimFrame = function(){
+    return (
+        window.requestAnimationFrame       || 
+        window.webkitRequestAnimationFrame || 
+        window.mozRequestAnimationFrame    || 
+        window.oRequestAnimationFrame      || 
+        window.msRequestAnimationFrame     || 
+        function(/* function */ callback){
+            window.setTimeout(callback, 1000 / 60);
+        }
+    );
+}();
+
+function drawPlayer(name, xpos, ypos, rotation) {
+	
+	ctx.save();
+
+	ctx.translate(xpos, ypos);
+
+	if (withRotation) {
+		ctx.rotate(rotation);
+	}
+
+	ctx.fillStyle="white"
+	ctx.fillRect(-15, -10, 30, 20)
+	ctx.fillStyle="black"
+	ctx.textAlign="center"
+	ctx.font="10px Arial"
+	ctx.fillText(name, 0, 3.0)
+
+	ctx.restore();
+}
+
+function drawBall(xpos, ypos, rotation) {
+
+	ctx.save();
+
+	ctx.translate(xpos, ypos);
+
+	if (withRotation) {
+		//ctx.translate(0, -12);
+		ctx.rotate(rotation);
+		ctx.translate(0, -12);
+	}
+
+	ctx.fillStyle="brown"
+	ctx.beginPath();
+	//ctx.arc(0, -12, 10, 0, Math.PI*2, false);
+	ctx.arc(0, 0, 10, 0, Math.PI*2, false);
+	ctx.closePath();
+	ctx.fill();
+
+	ctx.restore();
+}
+
+function interpolatePosAndRotation(timeElapsed, startTime, startPos, endTime, endPos) {
+
+	var interpolation = (timeElapsed - startTime) / (endTime - startTime)
+	var xDelta = endPos.x - startPos.x;
+	var yDelta = endPos.y - startPos.y;
+	var xpos = startPos.x + (interpolation * (xDelta))
+	var ypos = startPos.y + (interpolation * (yDelta))
+
+	var rotation = Math.atan2(xDelta, -yDelta);
+
+	return {
+		x: xpos,
+		y: ypos,
+		rotation: rotation
+	}
+}
+
+function getPositionAndRotation(timeElapsed, keyFrames)
+{
+	var nKeyFrames = keyFrames.length;
+	
+	// time before the first frame
+	if ((nKeyFrames == 1) || (timeElapsed <= keyFrames[0].time)) {
+		return {
+			x: keyFrames[0].x,
+			y: keyFrames[0].y,
+			rotation: 0
+		}
+	}
+
+	// time after the players last frame
+	if (timeElapsed >= keyFrames[nKeyFrames-1].time) {
+		// Find the final rotation vector
+		var penultimateFrame = keyFrames[nKeyFrames-2];
+		var lastFrame = keyFrames[nKeyFrames-1];
+		var lastPosAndrotation = interpolatePosAndRotation(timeElapsed, timeElapsed, penultimateFrame, timeElapsed, lastFrame);
+		return {
+			x: keyFrames[nKeyFrames - 1].x,
+			y: keyFrames[nKeyFrames - 1].y,
+			rotation: lastPosAndrotation.rotation
+			//rotation: 0
+		}
+	}
+
+	var i;
+	for (i=0;i<keyFrames.length;i++) {
+
+		frame1 = keyFrames[i];
+		frame2 = keyFrames[i+1];
+		
+		if (timeElapsed <= frame2.time) {
+			break;
+		}
+	}
+	
+	return interpolatePosAndRotation(timeElapsed, frame1.time, frame1, frame2.time, frame2);
+}
+
+function getPlayer(playerName) {
+	var i;
+	for (i = 0; i < play.attackers.length; i++) {
+		if (play.attackers[i].name == playerName) {
+			return play.attackers[i];
+		}
+	}
+}
+
+function getBallPosition(timeElapsed)
+{
+	// Who is carrying the ball?
+	var carries = play.ball.carriedBy;
+	var i;
+	for (i = 0; i < carries.length; i++) {
+
+		if (timeElapsed < carries[i].from) {
+
+			// Between carries. Noone holding the ball.
+
+			if (i === 0) {
+				var playerWithBall = getPlayer(carries[0].playerName);
+				return getPositionAndRotation(carries[0].from, playerWithBall.keyFrames);
+			}
+
+			var passer = getPlayer(carries[i - 1].playerName);
+			var passTime = carries[i - 1].to;
+			var passerPosition = getPositionAndRotation(passTime, passer.keyFrames);
+
+			var receiver = getPlayer(carries[i].playerName);
+			var receiveTime = carries[i].from;
+			var receiverPosition = getPositionAndRotation(receiveTime, receiver.keyFrames);
+
+			// The calculation of the ball rotation here does not work.
+			// We could to interpolate the rotation, but I think this will make the ball curve in the air. Which is cool, but not what we want!
+			
+			var ballPosition = interpolatePosAndRotation(timeElapsed, passTime, passerPosition, receiveTime, receiverPosition);
+			
+			var interpolateBallRotation = true;
+			if (interpolateBallRotation) {
+				var interpolation = (timeElapsed - passTime) / (receiveTime - passTime)
+				var rotDelta = receiverPosition.rotation - passerPosition.rotation;
+				ballPosition.rotation = passerPosition.rotation + (interpolation * (rotDelta))
+			}
+			
+			return ballPosition;
+		}
+
+		// This is easy - someone has the ball.
+		if (timeElapsed >= carries[i].from && timeElapsed <= carries[i].to) {
+
+			var playerWithBall = getPlayer(carries[i].playerName);
+			return getPositionAndRotation(timeElapsed, playerWithBall.keyFrames);
+		}
+	}
+
+	// Leave ball at its last position
+	var lastCarry = carries[carries.length - 1];
+	var lastCarrier = getPlayer(lastCarry.playerName);
+	return getPositionAndRotation(lastCarry.to, lastCarrier.keyFrames);
+}
+
+function render() {
+	
+	var timeElapsed = (Date.now() - startTime) / 1000;
+	if (slomo === true) {
+		timeElapsed = timeElapsed / 4;
+	}
+	
+	if (timeElapsed > playLength) {
+		return true;
+	}
+	
+	var canvas = document.getElementById("gameCanvas");
+	var ctx = canvas.getContext("2d");
+
+	ctx.fillStyle="green";
+	ctx.fillRect(0, 0, width, height);
+
+	// for each player in the play
+	var i;
+	var player;
+	var pos;
+	var rotation = 10;
+	for(i=0;i<play.attackers.length;i++) {
+
+		player = play.attackers[i]
+		pos = getPositionAndRotation(timeElapsed, player.keyFrames);
+		drawPlayer(player.name, pos.x, pos.y, pos.rotation);
+	}
+
+	pos = getBallPosition(timeElapsed);
+	drawBall(pos.x, pos.y, pos.rotation);
+	
+	ctx.fillStyle="white"
+	ctx.font="20px Arial"
+	ctx.textAlign="left"
+	ctx.fillText(play.playname, 25, 25);
+
+	return false;
+}
+
+function findPlayLength()
+{
+	var i, lastEntry = 0;
+	for(i=0;i<play.attackers.length;i++) {
+
+		var keyFrames = play.attackers[i].keyFrames;
+		if (keyFrames[keyFrames.length-1].time > lastEntry) {
+			lastEntry = keyFrames[keyFrames.length-1].time;
+		}
+	}
+	var carries = play.ball.carriedBy;
+	if (carries[carries.length - 1].to > lastEntry) {
+		lastEntry = carries[carries.length - 1].to;
+	}
+	return lastEntry;
+}
+
+function animLoop() {
+	if (render() == false) {
+		requestAnimFrame(animLoop);
+	}
+};
+
+function setPlay(playName) {
+
+	play = plays[0];
+
+	var i;
+	for (i = 0; i < plays.length; i++) {
+		if (plays[i].playname == playName) {
+			play = plays[i];
+			break;
+		}
+	}
+	playLength = findPlayLength();
+}
+
+function startLoop(playName) {
+
+	setPlay(playName);
+
+	startTime = Date.now();
+	animLoop();
+}
+
+buildPlayButtons();
+
+startLoop();
+
+</script>
+</body>
+
+</html>
